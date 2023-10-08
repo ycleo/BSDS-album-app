@@ -1,4 +1,5 @@
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import javax.security.auth.login.AccountNotFoundException;
 
 public class Main {
@@ -15,28 +16,33 @@ public class Main {
     int delay = Integer.parseInt(args[2]);
     String ipAddr = args[3];
 
+    // Initial phase with 10 threads
+    CountDownLatch initialLatch = new CountDownLatch(INITIAL_THREAD_COUNT);
+    runThreads(INITIAL_THREAD_COUNT, ipAddr, 100, initialLatch);
     double startTime = System.currentTimeMillis();
 
-    // Initial phase with 10 threads
-    CountDownLatch initialLatch = runThreads(INITIAL_THREAD_COUNT, ipAddr, 100);
-
     try {
-      // Wait for all initial threads to complete
-      initialLatch.await();
+      initialLatch.await(); // Wait for all initial threads to complete
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
+    System.out.println("Initial phase done");
 
     // Thread groups
+    CountDownLatch groupLatch = new CountDownLatch(threadGroupSize * numThreadGroups);
     for (int group = 0; group < numThreadGroups; group++) {
-      CountDownLatch groupLatch = runThreads(threadGroupSize, ipAddr, 1000);
+      runThreads(threadGroupSize, ipAddr, 1000, groupLatch);
       try {
-        // Wait for all threads in the current group to start
-//        groupLatch.await();
-        Thread.sleep(delay * 1000L); // Convert to milliseconds
+        Thread.sleep(delay * 1000L);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
+    }
+
+    try {
+      groupLatch.await(); // Wait for all threads to complete
+    } catch (InterruptedException e) {
+      e.printStackTrace();
     }
 
     double endTime = System.currentTimeMillis();
@@ -49,15 +55,11 @@ public class Main {
   }
 
 
-  private static CountDownLatch runThreads(int numThreads, String ipAddr, int numRequests) {
-    CountDownLatch latch = new CountDownLatch(numThreads);
-
+  private static void runThreads(int numThreads, String ipAddr, int numRequests, CountDownLatch latch) {
     for (int i = 0; i < numThreads; i++) {
       AlbumThread albumThread = new AlbumThread(ipAddr, numRequests, latch);
       albumThread.run();
     }
-
-    return latch;
   }
 
 }

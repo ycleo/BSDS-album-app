@@ -39,6 +39,8 @@ public class AlbumThread implements Runnable {
   }
 
   private void httpGetAlbum(DefaultApi apiInstance, String albumID) {
+//    double startTime = System.currentTimeMillis();
+//    System.out.println(startTime);
     try {
       AlbumInfo result = apiInstance.getAlbumByKey(albumID);
 //      System.out.println(result);
@@ -46,9 +48,13 @@ public class AlbumThread implements Runnable {
       System.err.println("Exception when calling DefaultApi#getAlbumByKey");
       e.printStackTrace();
     }
+//    double endTime = System.currentTimeMillis();
+//    System.out.println("GET: " + (endTime - startTime) + " ms");
   }
 
   private void httpPostAlbum(DefaultApi apiInstance, File image, AlbumsProfile profile) {
+//    double startTime = System.currentTimeMillis();
+//    System.out.println(startTime);
     try {
       ImageMetaData result = apiInstance.newAlbum(image, profile);
 //      System.out.println(result);
@@ -56,6 +62,8 @@ public class AlbumThread implements Runnable {
       System.err.println("Exception when calling DefaultApi#newAlbum");
       e.printStackTrace();
     }
+//    double endTime = System.currentTimeMillis();
+//    System.out.println("POST: " + (endTime - startTime) + " ms");
   }
 }
 
