@@ -57,8 +57,8 @@ public class Main {
 
   private static void runThreads(int numThreads, String ipAddr, int numRequests, CountDownLatch latch) {
     for (int i = 0; i < numThreads; i++) {
-      AlbumThread albumThread = new AlbumThread(ipAddr, numRequests, latch);
-      albumThread.run();
+      Thread albumThread = new Thread(new AlbumThread(ipAddr, numRequests, latch));
+      albumThread.start();
     }
   }
 
