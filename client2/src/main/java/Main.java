@@ -5,239 +5,68 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.security.auth.login.AccountNotFoundException;
 
 public class Main {
-  private static final int INITIAL_THREAD_COUNT = 10;
-  private static final String CSV_FILE_PATH = "./plot.csv";
-  private static final double INTERVAL = 1;
-
   public static void main(String[] args) {
-    if (args.length != 4) {
-      System.out.println("Missing Parameters: <threadGroupSize> <numThreadGroups> <delay> <IPAddr>");
-      System.exit(1);
+    Scanner input = new Scanner(System.in);
+    System.out.print("Input threadGroupSize:");
+    int threadGroupSize = input.nextInt();
+    System.out.print("Input numThreadGroups:");
+    int numThreadGroups = input.nextInt();
+    System.out.print("Input delay:");
+    int delay = input.nextInt();
+    String url;
+    while ((url = input.nextLine()).isEmpty()) {
+      System.out.print("Input server uri:");
     }
+    if (url.endsWith("/"))
+      url = url.substring(0, url.length() - 1);
 
-    int threadGroupSize = Integer.parseInt(args[0]);
-    int numThreadGroups = Integer.parseInt(args[1]);
-    int delay = Integer.parseInt(args[2]);
-    String ipAddr = args[3];
-
-    // Initial phase with 10 threads
-    CountDownLatch initialLatch = new CountDownLatch(INITIAL_THREAD_COUNT);
-    List<AlbumThread> initialThreads = runThreads(INITIAL_THREAD_COUNT, ipAddr, 100, initialLatch);
-    List<LatencyRecord> allLatencyRecords = new ArrayList<>(collectLatencyRecords(initialThreads));
-
-    double startTime = System.currentTimeMillis();
-
-    try {
-      initialLatch.await(); // Wait for all initial threads to complete
-    } catch (InterruptedException e) {
-      e.printStackTrace();
+    // first 10*100 requests
+    CountDownLatch firstStep = new CountDownLatch(10);
+    for (int i = 0; i < 10; i++) {
+      new Thread(
+          new Client(url, 100, firstStep, null)).start();
     }
-    System.out.println("Initial phase done");
+    firstStep.await();
+    System.out.println("First 10*100 requests done!");
 
-    // Thread groups
-    CountDownLatch groupLatch = new CountDownLatch(threadGroupSize * numThreadGroups);
-    List<AlbumThread> groupThreads = new ArrayList<>();
+    Analyzer analyzer = new Analyzer("output.csv");
 
-    for (int group = 0; group < numThreadGroups; group++) {
-      List<AlbumThread> threads = runThreads(threadGroupSize, ipAddr, 1000, groupLatch);
-      groupThreads.addAll(threads);
-      try {
-        Thread.sleep(delay * 1000L);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+    // Once all 10 threads have completed, startup threadGroupSize threads, each of
+    // which sends 400 POST APIs
+    long startTime = System.currentTimeMillis();
+    CountDownLatch total = new CountDownLatch(threadGroupSize * numThreadGroups);
+    for (int i = 0; i < numThreadGroups; i++) {
+      for (int j = 0; j < threadGroupSize; j++) {
+        new Thread(
+            new Client(url, 100, total, analyzer)).start();
       }
-    }
-
-    try {
-      groupLatch.await(); // Wait for all threads to complete
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
-
-    double endTime = System.currentTimeMillis();
-    // Calculate and output results
-    int requestCount = (INITIAL_THREAD_COUNT * 100 + threadGroupSize * numThreadGroups * 1000) * 2;
-    double wallTime = (endTime - startTime) / 1000;
-    System.out.println("Request Count: " + requestCount + " requests (GET+POST).");
-    System.out.println("Wall Time: " + wallTime + " seconds");
-    System.out.println("Throughput: " + (double)requestCount / wallTime + " requests/second");
-
-    // After all threads are completed, collect and process latency records
-    for (AlbumThread albumThread : groupThreads) {
-      allLatencyRecords.addAll(albumThread.getLatencyRecords());
-    }
-
-    // Calculate and display latency statistics
-    calculateAndDisplayStatistics(allLatencyRecords);
-
-    // Calculate and export throughput data to CSV
-    calculateAndExportThroughputCSV(allLatencyRecords, wallTime);
-  }
-
-
-  private static List<AlbumThread> runThreads(int numThreads, String ipAddr, int numRequests, CountDownLatch latch) {
-    List<AlbumThread> threads = new ArrayList<>();
-    for (int i = 0; i < numThreads; i++) {
-      AlbumThread albumThread = new AlbumThread(ipAddr, numRequests, latch);
-      threads.add(albumThread);
-      Thread thread = new Thread(albumThread);
-      thread.start();
-    }
-    return threads;
-  }
-
-  private static List<LatencyRecord> collectLatencyRecords(List<AlbumThread> threads) {
-    List<LatencyRecord> records = new ArrayList<>();
-    for (AlbumThread thread : threads) {
-      records.addAll(thread.getLatencyRecords());
-    }
-    return records;
-  }
-
-  private static void calculateAndDisplayStatistics(List<LatencyRecord> latencyRecords) {
-    // Calculate the number of successful and failed requests
-    int numSuccessfulRequests = countSuccessfulRequests(latencyRecords);
-    int numFailedRequests = countFailedRequests(latencyRecords);
-    System.out.println("Number of Successful Requests: " + numSuccessfulRequests);
-    System.out.println("Number of Failed Requests: " + numFailedRequests);
-
-    // Calculate and display statistics here
-    System.out.println("Mean Response Time: " + calculateMean(latencyRecords) + " milliseconds");
-    System.out.println("Median Response Time: " + calculateMedian(latencyRecords) + " milliseconds");
-    System.out.println("P99 Response Time: " + calculatePercentile(latencyRecords, 99) + " milliseconds");
-    System.out.println("Min Response Time: " + calculateMin(latencyRecords) + " milliseconds");
-    System.out.println("Max Response Time: " + calculateMax(latencyRecords) + " milliseconds");
-  }
-
-  private static long calculateMean(List<LatencyRecord> latencyRecords) {
-    if (latencyRecords.isEmpty()) {
-      return 0;
-    }
-
-    long sum = 0;
-    for (LatencyRecord record : latencyRecords) {
-      sum += record.getLatency();
-    }
-
-    return sum / latencyRecords.size();
-  }
-
-  private static double calculateMedian(List<LatencyRecord> latencyRecords) {
-    if (latencyRecords.isEmpty()) {
-      return 0;
-    }
-
-    List<Double> sortedLatencies = new ArrayList<>();
-    for (LatencyRecord record : latencyRecords) {
-      sortedLatencies.add(record.getLatency());
-    }
-
-    Collections.sort(sortedLatencies);
-
-    int size = sortedLatencies.size();
-    if (size % 2 == 0) {
-      // Even number of elements, take the average of middle two
-      return (sortedLatencies.get(size / 2 - 1) + sortedLatencies.get(size / 2)) / 2;
-    } else {
-      // Odd number of elements, take the middle one
-      return sortedLatencies.get(size / 2);
-    }
-  }
-
-  private static double calculatePercentile(List<LatencyRecord> latencyRecords, int percentile) {
-    if (latencyRecords.isEmpty()) {
-      return 0;
-    }
-
-    List<Double> sortedLatencies = new ArrayList<>();
-    for (LatencyRecord record : latencyRecords) {
-      sortedLatencies.add(record.getLatency());
-    }
-
-    Collections.sort(sortedLatencies);
-
-    int index = (int) Math.ceil((percentile / 100.0) * sortedLatencies.size()) - 1;
-    return sortedLatencies.get(index);
-  }
-
-  private static double calculateMin(List<LatencyRecord> latencyRecords) {
-    if (latencyRecords.isEmpty()) {
-      return 0;
-    }
-
-    return Collections.min(latencyRecords, Comparator.comparing(LatencyRecord::getLatency)).getLatency();
-  }
-
-  private static double calculateMax(List<LatencyRecord> latencyRecords) {
-    if (latencyRecords.isEmpty()) {
-      return 0;
-    }
-
-    return Collections.max(latencyRecords, Comparator.comparing(LatencyRecord::getLatency)).getLatency();
-  }
-
-  private static int countSuccessfulRequests(List<LatencyRecord> latencyRecords) {
-    int count = 0;
-    for (LatencyRecord record : latencyRecords) {
-      if ((record.getRequestType().equals("GET") && record.getResponseCode() == 200) ||
-          (record.getRequestType().equals("POST") && record.getResponseCode() == 201)) {
-        count++;
+      if ((i + 1) % 10 == 0) {
+        System.out.println("First " + (i + 1) + " Groups sent!");
       }
+      Thread.sleep(delay * 1000L);
     }
-    return count;
+    total.await();
+
+    long endTime = System.currentTimeMillis();
+    analyzer.end();
+    System.out.println("Wall Time: " + (endTime - startTime) + "ms");
+    System.out.println(
+        "Throughput: " + (1000.0 * 400 * threadGroupSize * numThreadGroups) / (endTime - startTime)
+            + "/s");
+    System.out.println("Mean Response Time: " + analyzer.getPostMeanResponseTime());
+    System.out.println("Median Response Time: " + analyzer.getPostMedianResponseTime());
+    System.out.println("P99 Response Time: " + analyzer.getPostP99ResponseTime());
+    System.out.println("Min Response Time: " + analyzer.getPostMinResponseTime());
+    System.out.println("Max Response Time: " + analyzer.getPostMaxResponseTime());
+    System.out.println("Success/Fail Requests: " + analyzer.successCounter.get() + "/"
+        + analyzer.failCounter.get());
+
   }
-
-  private static int countFailedRequests(List<LatencyRecord> latencyRecords) {
-    int count = 0;
-    for (LatencyRecord record : latencyRecords) {
-      if (!((record.getRequestType().equals("GET") && record.getResponseCode() == 200) ||
-          (record.getRequestType().equals("POST") && record.getResponseCode() == 201))) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  private static void calculateAndExportThroughputCSV(List<LatencyRecord> latencyRecords, double wallTime) {
-    try {
-      FileWriter csvWriter = new FileWriter("./throughput.csv");
-      csvWriter.append("Time (s),Throughput (req/s)\n");
-
-      double startTime = latencyRecords.get(0).getStartTime();
-      double endTime = latencyRecords.get(latencyRecords.size() - 1).getStartTime();
-
-      int timeInterval = 1000; // 1 second interval
-      int currentIndex = 0;
-      int requestCount = 0;
-
-      for (double currentTime = startTime; currentTime <= endTime; currentTime += timeInterval) {
-        while (currentIndex < latencyRecords.size() &&
-            latencyRecords.get(currentIndex).getStartTime() <= currentTime) {
-          requestCount++;
-          currentIndex++;
-        }
-
-        double timeInSeconds = (currentTime - startTime) / 1000.0;
-        double throughput = (double) requestCount / timeInSeconds;
-
-        csvWriter.append(String.valueOf(timeInSeconds)).append(",")
-            .append(String.valueOf(throughput)).append("\n");
-      }
-
-      csvWriter.flush();
-      csvWriter.close();
-
-      System.out.println("Throughput data exported to throughput.csv");
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-  }
-
 
 }
-

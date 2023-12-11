@@ -1,7 +1,14 @@
-public class ImageMetaData {
+package Models;
+
+import com.google.gson.annotations.Expose;
+
+public class AlbumResponse {
+  @Expose
   private String albumID;
+  @Expose
   private String imageSize;
-  public ImageMetaData(String albumID, String imageSize) {
+
+  public AlbumResponse(String albumID, String imageSize) {
     this.albumID = albumID;
     this.imageSize = imageSize;
   }
