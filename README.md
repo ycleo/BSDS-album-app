@@ -6,4 +6,4 @@
 Amazon Web Services, RabbitMQ, Redis, MySQL
 
 - Details & Experiments: \
-[Google Slids](https://docs.google.com/presentation/d/13txC2UHbwbjUQpB9Py43XBZyOTcZil0qGK0_3N0erPU/edit?usp=sharing)
+[Google Slides](https://docs.google.com/presentation/d/13txC2UHbwbjUQpB9Py43XBZyOTcZil0qGK0_3N0erPU/edit?usp=sharing)
