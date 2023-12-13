@@ -3,6 +3,7 @@ package Server;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.rabbitmq.client.Channel;
+import cs6650_assignment.Models.ReviewResponse;
 import cs6650_assignment.Models.Status;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -55,6 +56,37 @@ public class ReviewServlet extends HttpServlet {
     }
   }
 
+  @Override
+  protected void doGet(HttpServletRequest req, HttpServletResponse res)
+      throws ServletException, IOException {
+    res.setContentType("application/json; charset=UTF-8");
+    String urlPath = req.getPathInfo();
+
+    try{
+      if (urlPath == null || urlPath.length()==0) {
+        throw new IllegalArgumentException();
+      }
+      String[] urlParts = urlPath.split("/");
+      long album_id = Long.parseLong(urlParts[1]);
+      ReviewResponse ret = albumDAO.queryAlbumReview(album_id);
+      if(ret!=null){
+        res.setStatus(200);
+        res.getOutputStream().print(gson.toJson(ret));
+        res.getOutputStream().flush();
+      }else{
+        res.setStatus(404);
+        Status s = new Status(false,"Album not found");
+        res.getOutputStream().print(gson.toJson(s));
+        res.getOutputStream().flush();
+      }
+
+    }catch (Exception e){
+      res.setStatus(400);
+      Status status = new Status(false,"invalid inputs");
+      res.getOutputStream().print(gson.toJson(status));
+      res.getOutputStream().flush();
+    }
+  }
   private boolean writeToMQ(long albumId, boolean like) {
     try {
       // channel per thread

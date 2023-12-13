@@ -2,9 +2,9 @@ package Server;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import cs6650_assignment.Models.Album;
-import cs6650_assignment.Models.AlbumResponse;
-import cs6650_assignment.Models.Status;
+import Models.Album;
+import Models.AlbumResponse;
+import Models.Status;
 import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;

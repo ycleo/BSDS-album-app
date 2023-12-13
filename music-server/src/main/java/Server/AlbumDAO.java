@@ -3,9 +3,10 @@ package Server;
 import com.rabbitmq.client.ConnectionFactory;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import cs6650_assignment.MQConsumer.RMQChannelFactory;
-import cs6650_assignment.MQConsumer.RMQChannelPool;
-import cs6650_assignment.Models.Album;
+import MQConsumer.RMQChannelFactory;
+import MQConsumer.RMQChannelPool;
+import Models.Album;
+import Models.ReviewResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -36,10 +37,12 @@ public class AlbumDAO {
   private final RMQChannelPool channelPool;
 
   private ConnectionFactory factory;
+  private RedisClient redisClient;
 
   public AlbumDAO(){
     dataSource = setupHikari();
     channelPool = setupRabbitMQ(consumerSize);
+    redisClient = new RedisClient();
   }
 
   public RMQChannelPool setupRabbitMQ(int consumerSize){
@@ -136,8 +139,36 @@ public class AlbumDAO {
     return false;
   }
 
+  public ReviewResponse queryAlbumReview(long albumId){
+    ReviewResponse ret = redisClient.queryReview(String.valueOf(albumId));
+    if(ret==null)
+      ret = queryAlbumReviewFromDB(albumId);
+    return ret;
+  }
+
+  public ReviewResponse queryAlbumReviewFromDB(long albumId){
+    try(Connection conn = dataSource.getConnection()){
+      PreparedStatement s = conn.prepareStatement("SELECT likes,dislikes FROM Albums WHERE Id=?");
+      s.setLong(1,albumId);
+      ResultSet rs = s.executeQuery();
+      if(rs.next()){
+        ReviewResponse res = new ReviewResponse(String.valueOf(rs.getLong(1)),String.valueOf(rs.getLong(2)));
+        redisClient.setReview(String.valueOf(albumId),res);
+        return res;
+      }
+    }catch (Exception e){
+      System.out.println("Error during queryAlbum: " + e.getMessage());
+      e.printStackTrace();
+    }
+    return null;
+  }
+
   public static AlbumDAO getDao(){
     return dao;
+  }
+
+  public RedisClient getRedisClient() {
+    return redisClient;
   }
 
   public int getConsumerSize() {

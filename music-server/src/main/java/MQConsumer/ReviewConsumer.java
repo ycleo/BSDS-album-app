@@ -6,8 +6,6 @@ import com.rabbitmq.client.DeliverCallback;
 import cs6650_assignment.Server.AlbumDAO;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class ReviewConsumer implements Runnable{
   private final static String QUEUE_NAME = "REVIEW_QUEUE";
@@ -28,11 +26,13 @@ public class ReviewConsumer implements Runnable{
         int retry = 5;
         while (true){
           try{
+            AlbumDAO.getDao().getRedisClient().addReview(mes.split("_")[0],Boolean.parseBoolean(mes.split("_")[1]));
             writeToDB(mes);
             break;
-          }catch (SQLException e){
+          }catch (Exception e){
             if (--retry==0){
               System.out.println("Retry 5 times failed!\n");
+              e.printStackTrace();
               break;
             }
           }
@@ -42,7 +42,7 @@ public class ReviewConsumer implements Runnable{
       // process messages
       channel.basicConsume(QUEUE_NAME, true, deliverCallback, consumerTag -> { });
     } catch (Exception ex) {
-      Logger.getLogger(ReviewConsumer.class.getName()).log(Level.SEVERE, null, ex);
+      ex.printStackTrace();
     }
   }
 
